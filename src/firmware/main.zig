@@ -5,15 +5,13 @@ const Incubator = @import("./app/incubator.zig");
 const Display = @import("./app/display.zig");
 const Readings = @import("./domain/readings.zig").Readings;
 
-const HEARTBEAT_INTERVAL_US: u64 = 500_000;
-
 pub fn main() !void {
     const pins = board.apply();
 
     try init_peripherals();
 
     var readings: Readings = .{};
-    var incubator = try Incubator.init(pins, HEARTBEAT_INTERVAL_US, &readings);
+    var incubator = try Incubator.init(pins, &readings);
     var display = try Display.init(pins, &readings);
 
     while (true) {

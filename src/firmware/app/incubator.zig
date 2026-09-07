@@ -11,30 +11,38 @@ const heater_control = @import("../domain/heater_control.zig");
 const temp_sensor = @import("../platform/rp2040/drivers/temp_sensor.zig");
 const ultrasonic = @import("../platform/rp2040/drivers/ultrasonic.zig");
 const power_switch = @import("../platform/rp2040/drivers/power_switch.zig");
-const PowerSwitch = @import("../domain/power_switch_control.zig").PowerSwitch;
+const power_switch_control = @import("../domain/power_switch_control.zig");
+const PowerSwitch = power_switch_control.PowerSwitch;
+const PowerState = power_switch_control.PowerState;
 const rotary = @import("../platform/rp2040/drivers/rotary.zig");
 const rotary_control = @import("../domain/rotary_control.zig");
 const Blink = @import("../domain/blink.zig");
 const Readings = @import("../domain/readings.zig").Readings;
-const MAX_TEMP_AGE_US = @import("../domain/readings.zig").MAX_TEMP_AGE_US;
 
 const Self = @This();
 
 const DISTANCE_INTERVAL_US: u64 = 250_000;
 const TELEMETRY_INTERVAL_US: u64 = 1_000_000;
+const HEARTBEAT_INTERVAL_US: u64 = 500_000;
+
+pub const Snapshot = struct {
+    temp: ?f32,
+    distance: ?f32,
+    target: f32,
+    power: PowerState,
+};
 
 readings: *Readings,
 temp_sampler: timing.Sampler = .{},
 distance_ticker: Ticker = .{ .interval_us = DISTANCE_INTERVAL_US },
 telemetry_ticker: Ticker = .{ .interval_us = TELEMETRY_INTERVAL_US },
-heartbeat_ticker: Ticker,
-polls_since_telemetry: u32 = 0,
+heartbeat_ticker: Ticker = .{ .interval_us = HEARTBEAT_INTERVAL_US },
 led_state: Blink.LedState = .off,
 heater_state: heater_control.HeaterState = .power_off,
 power_switch_state: PowerSwitch = .{},
 rotary_state: rotary_control.Rotary = .{ .last_clk = .high, .last_sw = .high },
 
-pub fn init(pins: board.Pins, heartbeat_interval_us: u64, readings: *Readings) !Self {
+pub fn init(pins: board.Pins, readings: *Readings) !Self {
     try temp_sensor.init(pins.temp);
     temp_sensor.configure() catch |err| {
         usb_cdc.write("ds18b20 init failed: {s}\r\n", .{@errorName(err)});
@@ -45,10 +53,7 @@ pub fn init(pins: board.Pins, heartbeat_interval_us: u64, readings: *Readings) !
     power_switch.init(pins.power_switch);
     rotary.init(pins.rotary_sw, pins.rotary_clk, pins.rotary_dt);
 
-    const self = Self{
-        .readings = readings,
-        .heartbeat_ticker = .{ .interval_us = heartbeat_interval_us },
-    };
+    const self = Self{ .readings = readings };
     heater.set(self.heater_state) catch |err| {
         usb_cdc.write("heater init failed: {s}\r\n", .{@errorName(err)});
     };
@@ -58,18 +63,31 @@ pub fn init(pins: board.Pins, heartbeat_interval_us: u64, readings: *Readings) !
 
 pub fn poll(self: *Self) void {
     const now = time.get_time_since_boot().to_us();
-    self.polls_since_telemetry += 1;
 
-    power_switch.read(&self.power_switch_state);
-    self.pollRotary();
-    self.pollHeater(now);
-    self.pollTemp(now);
-    self.pollDistance(now);
-    self.pollHeartbeat(now);
-    self.pollTelemetry(now);
+    const snapshot = self.sense(now);
+    const heat = self.control(snapshot, now);
+    self.actuate(snapshot, heat, now);
 }
 
-fn pollRotary(self: *Self) void {
+fn sense(self: *Self, now_us: u64) Snapshot {
+    self.sensePowerSwitch();
+    self.senseRotary();
+    self.senseTemp(now_us);
+    self.senseDistance(now_us);
+
+    return .{
+        .temp = self.readings.freshTemp(now_us),
+        .distance = self.readings.distance_cm,
+        .target = self.readings.target_temp,
+        .power = self.power_switch_state.state,
+    };
+}
+
+fn sensePowerSwitch(self: *Self) void {
+    power_switch.read(&self.power_switch_state);
+}
+
+fn senseRotary(self: *Self) void {
     const delta = self.rotary_state.update(rotary.readClk(), rotary.readDt());
     if (delta != 0) {
         self.readings.recordTarget(rotary_control.clamp(self.readings.target_temp + delta));
@@ -80,30 +98,7 @@ fn pollRotary(self: *Self) void {
     }
 }
 
-fn pollHeater(self: *Self, now_us: u64) void {
-    self.decideHeaterState(now_us);
-
-    self.readings.recordHeat(switch (self.heater_state) {
-        .heating => .heating,
-        else => .idle,
-    });
-
-    heater.set(self.heater_state) catch |err| {
-        usb_cdc.write("heater write failed: {s}\r\n", .{@errorName(err)});
-    };
-}
-
-fn decideHeaterState(self: *Self, now_us: u64) void {
-    self.heater_state = heater_control.decide(
-        self.readings.freshTemp(now_us),
-        self.readings.target_temp,
-        self.power_switch_state.state,
-        self.heater_state,
-        now_us,
-    );
-}
-
-fn pollTemp(self: *Self, now_us: u64) void {
+fn senseTemp(self: *Self, now_us: u64) void {
     switch (self.temp_sampler.poll(now_us)) {
         .none => {},
         .start_conversion => temp_sensor.startConversion() catch |err| {
@@ -119,7 +114,7 @@ fn pollTemp(self: *Self, now_us: u64) void {
     }
 }
 
-fn pollDistance(self: *Self, now_us: u64) void {
+fn senseDistance(self: *Self, now_us: u64) void {
     if (!self.distance_ticker.ready(now_us)) return;
 
     const distance_cm = ultrasonic.measure(usb_cdc.poll) catch |err| {
@@ -130,8 +125,36 @@ fn pollDistance(self: *Self, now_us: u64) void {
     self.readings.recordDistance(distance_cm);
 }
 
-fn pollHeartbeat(self: *Self, now_us: u64) void {
-    const desired: Blink.LedState = if (self.heater_state == .heating)
+fn control(self: *Self, snapshot: Snapshot, now_us: u64) heater_control.HeaterState {
+    self.heater_state = heater_control.decide(
+        snapshot.temp,
+        snapshot.target,
+        snapshot.power,
+        self.heater_state,
+        now_us,
+    );
+    return self.heater_state;
+}
+
+fn actuate(self: *Self, snapshot: Snapshot, heat: heater_control.HeaterState, now_us: u64) void {
+    self.actuateHeater(heat);
+    self.actuateLed(heat, now_us);
+    self.report(snapshot, heat, now_us);
+}
+
+fn actuateHeater(self: *Self, heat: heater_control.HeaterState) void {
+    self.readings.recordHeat(switch (heat) {
+        .heating => .heating,
+        else => .idle,
+    });
+
+    heater.set(heat) catch |err| {
+        usb_cdc.write("heater write failed: {s}\r\n", .{@errorName(err)});
+    };
+}
+
+fn actuateLed(self: *Self, heat: heater_control.HeaterState, now_us: u64) void {
+    const desired: Blink.LedState = if (heat == .heating)
         .on
     else if (self.heartbeat_ticker.ready(now_us))
         self.led_state.toggled()
@@ -144,63 +167,51 @@ fn pollHeartbeat(self: *Self, now_us: u64) void {
     status_led.set(desired);
 }
 
-fn pollTelemetry(self: *Self, now_us: u64) void {
+fn report(self: *Self, snapshot: Snapshot, heat: heater_control.HeaterState, now_us: u64) void {
     if (!self.telemetry_ticker.ready(now_us)) return;
 
-    usb_cdc.write("polls/s: {} temp: {?} dist: {?} power: {s} heater: {s}\r\n", .{
-        self.polls_since_telemetry,
-        self.readings.current_temp,
-        self.readings.distance_cm,
-        @tagName(self.power_switch_state.state),
-        @tagName(self.heater_state),
+    usb_cdc.write("temp: {?} dist: {?} target: {} power: {s} heater: {s}\r\n", .{
+        snapshot.temp,
+        snapshot.distance,
+        snapshot.target,
+        @tagName(snapshot.power),
+        @tagName(heat),
     });
-    self.polls_since_telemetry = 0;
 }
 
-fn testIncubator(readings: *Readings) Self {
-    var incubator = Self{
-        .readings = readings,
-        .heartbeat_ticker = .{ .interval_us = 1 },
-    };
-    incubator.power_switch_state.switchOn();
-    return incubator;
+fn heatingSnapshot(target: f32) Snapshot {
+    return .{ .temp = target - 1, .distance = null, .target = target, .power = .on };
 }
 
-test "incubator turns off the heater command after the power switch is switched off" {
+test "control latches the heater on while the temperature is below target" {
     var readings: Readings = .{};
-    readings.recordTemp(readings.target_temp - 1, 100);
-    var incubator = testIncubator(&readings);
+    var incubator = Self{ .readings = &readings };
 
-    incubator.decideHeaterState(100);
-    try std.testing.expectEqual(
-        heater_control.HeaterState{ .heating = .{ .since_us = 100 } },
-        incubator.heater_state,
-    );
-
-    incubator.power_switch_state.switchOff();
-    incubator.decideHeaterState(200);
-    try std.testing.expectEqual(heater_control.HeaterState.power_off, incubator.heater_state);
+    const heat = incubator.control(heatingSnapshot(readings.target_temp), 100);
+    try std.testing.expectEqual(heater_control.HeaterState{ .heating = .{ .since_us = 100 } }, heat);
+    try std.testing.expectEqual(heat, incubator.heater_state);
 }
 
-test "incubator does not heat before the first temperature reading" {
+test "control turns the heater off after the power switch is switched off" {
     var readings: Readings = .{};
-    var incubator = testIncubator(&readings);
+    var incubator = Self{ .readings = &readings };
 
-    incubator.decideHeaterState(100);
-    try std.testing.expectEqual(heater_control.HeaterState.idle, incubator.heater_state);
+    _ = incubator.control(heatingSnapshot(readings.target_temp), 100);
+
+    var off = heatingSnapshot(readings.target_temp);
+    off.power = .off;
+
+    const heat = incubator.control(off, 200);
+    try std.testing.expectEqual(heater_control.HeaterState.power_off, heat);
 }
 
-test "incubator stops heating once the temperature reading goes stale" {
+test "control does not heat without a temperature reading" {
     var readings: Readings = .{};
-    readings.recordTemp(readings.target_temp - 1, 100);
-    var incubator = testIncubator(&readings);
+    var incubator = Self{ .readings = &readings };
 
-    incubator.decideHeaterState(100);
-    try std.testing.expectEqual(
-        heater_control.HeaterState{ .heating = .{ .since_us = 100 } },
-        incubator.heater_state,
-    );
+    var blind = heatingSnapshot(readings.target_temp);
+    blind.temp = null;
 
-    incubator.decideHeaterState(100 + MAX_TEMP_AGE_US + 1);
-    try std.testing.expectEqual(heater_control.HeaterState.idle, incubator.heater_state);
+    const heat = incubator.control(blind, 100);
+    try std.testing.expectEqual(heater_control.HeaterState.idle, heat);
 }

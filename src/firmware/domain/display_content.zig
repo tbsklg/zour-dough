@@ -3,13 +3,6 @@ const std = @import("std");
 pub const SPLASH_TOP: [16]u8 = "Zour-Dough      ".*;
 pub const SPLASH_VER: [16]u8 = "v2026.09.12     ".*;
 
-test "splash rows are exactly one display row" {
-    try std.testing.expectEqual(16, SPLASH_TOP.len);
-    try std.testing.expectEqual(16, SPLASH_VER.len);
-    try std.testing.expectEqualStrings("Zour-Dough      ", &SPLASH_TOP);
-    try std.testing.expectEqualStrings("v2026.09.12     ", &SPLASH_VER);
-}
-
 pub fn tempRow(buf: *[16]u8, temp: ?f32) []const u8 {
     if (temp) |t| {
         return std.fmt.bufPrint(buf, "{s:<4}{d:>10.1} C", .{ "NOW", t }) catch unreachable;

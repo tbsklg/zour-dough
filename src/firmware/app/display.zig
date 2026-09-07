@@ -1,6 +1,6 @@
 const rp2xxx = @import("microzig").hal;
 const time = rp2xxx.time;
-const board = @import("../platform/rp2040/board/pico_wh.zig");
+const board = @import("../platform/rp2040/board/pico.zig");
 const oled = @import("../platform/rp2040/drivers/oled.zig");
 const display_content = @import("../domain/display_content.zig");
 const usb_cdc = @import("../platform/rp2040/transport/usb_cdc.zig");

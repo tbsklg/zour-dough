@@ -1,32 +1,61 @@
-const rp2xxx = @import("microzig").hal;
-const Level = @import("../../../domain/rotary_control.zig").Level;
+const microzig = @import("microzig");
+const rp2xxx = microzig.hal;
+const gpio = rp2xxx.gpio;
+const rotary_control = @import("../../../domain/rotary_control.zig");
+const Level = rotary_control.Level;
 
-var sw_gpio: rp2xxx.drivers.GPIO_Device = undefined;
-var clk_gpio: rp2xxx.drivers.GPIO_Device = undefined;
-var dt_gpio: rp2xxx.drivers.GPIO_Device = undefined;
+const EDGES = gpio.IrqEvents{ .rise = 1, .fall = 1 };
 
-pub fn init(sw_pin: anytype, clk_pin: anytype, dt_pin: anytype) void {
-    sw_gpio = rp2xxx.drivers.GPIO_Device.init(sw_pin);
-    clk_gpio = rp2xxx.drivers.GPIO_Device.init(clk_pin);
-    dt_gpio = rp2xxx.drivers.GPIO_Device.init(dt_pin);
+var sw_pin: gpio.Pin = undefined;
+var clk_pin: gpio.Pin = undefined;
+var dt_pin: gpio.Pin = undefined;
+
+var quadrature: rotary_control.Quadrature = .{};
+var counts: i32 = 0;
+
+pub fn init(sw: gpio.Pin, clk: gpio.Pin, dt: gpio.Pin) void {
+    sw_pin = sw;
+    clk_pin = clk;
+    dt_pin = dt;
+
+    _ = quadrature.update(readClk(), readDt());
+
+    clk_pin.set_irq_enabled(EDGES, true);
+    dt_pin.set_irq_enabled(EDGES, true);
+    microzig.interrupt.enable(.IO_IRQ_BANK0);
+}
+
+// Runs from RAM so the handler never waits on flash. The encoder is the only
+// input in the system that loses information when a sample is missed, so it is
+// decoded here rather than in the main loop, which stalls for tens of
+// milliseconds on the display flush and the one-wire reads.
+pub fn onGpioIrq() linksection(".ram_text") callconv(.c) void {
+    var iter = gpio.IrqEventIter{};
+    while (iter.next()) |_| {}
+    counts += quadrature.update(readClk(), readDt());
+}
+
+pub fn takeCounts() i32 {
+    const section = microzig.interrupt.enter_critical_section();
+    defer section.leave();
+
+    const taken = counts;
+    counts = 0;
+    return taken;
 }
 
 pub fn readSw() Level {
-    return read(sw_gpio);
+    return level(sw_pin);
 }
 
-pub fn readClk() Level {
-    return read(clk_gpio);
+fn readClk() Level {
+    return level(clk_pin);
 }
 
-pub fn readDt() Level {
-    return read(dt_gpio);
+fn readDt() Level {
+    return level(dt_pin);
 }
 
-fn read(gpio: rp2xxx.drivers.GPIO_Device) Level {
-    const level = gpio.read() catch return .high;
-    return switch (level) {
-        .low => .low,
-        .high => .high,
-    };
+fn level(pin: gpio.Pin) Level {
+    return if (pin.read() == 1) .high else .low;
 }

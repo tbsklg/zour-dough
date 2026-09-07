@@ -13,6 +13,7 @@ pub const pin_config = rp2xxx.pins.GlobalConfiguration{
     .GPIO13 = .{ .name = "rotary_sw", .direction = .in, .pull = .up },
     .GPIO14 = .{ .name = "rotary_clk", .direction = .in, .pull = .up },
     .GPIO15 = .{ .name = "rotary_dt", .direction = .in, .pull = .up },
+    .GPIO25 = .{ .name = "status_led", .direction = .out, .pull = .down },
 };
 
 pub const Pins = @TypeOf(pin_config.apply());

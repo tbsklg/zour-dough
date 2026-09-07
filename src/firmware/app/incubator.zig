@@ -2,7 +2,7 @@ const std = @import("std");
 const rp2xxx = @import("microzig").hal;
 const time = rp2xxx.time;
 const usb_cdc = @import("../platform/rp2040/transport/usb_cdc.zig");
-const board = @import("../platform/rp2040/board/pico_wh.zig");
+const board = @import("../platform/rp2040/board/pico.zig");
 const status_led = @import("../platform/rp2040/drivers/status_led.zig");
 const timing = @import("../support/timing.zig");
 const Ticker = timing.Ticker;
@@ -40,7 +40,7 @@ heartbeat_ticker: Ticker = .{ .interval_us = HEARTBEAT_INTERVAL_US },
 led_state: Blink.LedState = .off,
 heater_state: heater_control.HeaterState = .power_off,
 power_switch_state: PowerSwitch = .{},
-rotary_state: rotary_control.Rotary = .{ .last_clk = .high, .last_sw = .high },
+button_state: rotary_control.Button = .{},
 
 pub fn init(pins: board.Pins, readings: *Readings) !Self {
     try temp_sensor.init(pins.temp);
@@ -88,12 +88,12 @@ fn sensePowerSwitch(self: *Self) void {
 }
 
 fn senseRotary(self: *Self) void {
-    const delta = self.rotary_state.update(rotary.readClk(), rotary.readDt());
-    if (delta != 0) {
-        self.readings.recordTarget(rotary_control.clamp(self.readings.target_temp + delta));
+    const counts = rotary.takeCounts();
+    if (counts != 0) {
+        self.readings.recordTarget(rotary_control.adjust(self.readings.target_temp, counts));
     }
 
-    if (self.rotary_state.updateButton(rotary.readSw())) {
+    if (self.button_state.update(rotary.readSw())) {
         self.readings.recordTarget(rotary_control.DEFAULT_TEMP);
     }
 }

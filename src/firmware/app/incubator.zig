@@ -28,8 +28,9 @@ const HEARTBEAT_INTERVAL_US: u64 = 500_000;
 pub const Snapshot = struct {
     temp: ?f32,
     distance: ?f32,
-    target: f32,
     power: PowerState,
+    counts: i32,
+    press: rotary_control.Press,
 };
 
 const Ticks = struct {
@@ -80,31 +81,20 @@ pub fn poll(self: *Self) void {
 
 fn sense(self: *Self, now_us: u64) Snapshot {
     self.sensePowerSwitch();
-    self.senseRotary();
     self.senseTemp(now_us);
     self.senseDistance(now_us);
 
     return .{
         .temp = self.readings.freshTemp(now_us),
         .distance = self.readings.distance_cm,
-        .target = self.readings.target_temp,
         .power = self.power_switch_state.state,
+        .counts = rotary.takeCounts(),
+        .press = self.button_state.update(rotary.readSw()),
     };
 }
 
 fn sensePowerSwitch(self: *Self) void {
     power_switch.read(&self.power_switch_state);
-}
-
-fn senseRotary(self: *Self) void {
-    const counts = rotary.takeCounts();
-    if (counts != 0) {
-        self.readings.recordTarget(rotary_control.adjust(self.readings.target_temp, counts));
-    }
-
-    if (self.button_state.update(rotary.readSw()) == .pressed) {
-        self.readings.recordTarget(rotary_control.DEFAULT_TEMP);
-    }
 }
 
 fn senseTemp(self: *Self, now_us: u64) void {
@@ -135,9 +125,15 @@ fn senseDistance(self: *Self, now_us: u64) void {
 }
 
 fn control(self: *Self, snapshot: Snapshot, now_us: u64) void {
+    self.readings.recordTarget(rotary_control.nextTarget(
+        self.readings.target_temp,
+        snapshot.counts,
+        snapshot.press,
+    ));
+
     self.heater_state = heater_control.decide(
         snapshot.temp,
-        snapshot.target,
+        self.readings.target_temp,
         snapshot.power,
         self.heater_state,
         now_us,
@@ -178,7 +174,7 @@ fn report(self: *Self, snapshot: Snapshot, telemetry: Tick) void {
     usb_cdc.write("temp: {?} dist: {?} target: {} power: {s} heater: {s}\r\n", .{
         snapshot.temp,
         snapshot.distance,
-        snapshot.target,
+        self.readings.target_temp,
         @tagName(snapshot.power),
         @tagName(self.heater_state),
     });

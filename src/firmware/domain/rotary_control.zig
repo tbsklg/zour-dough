@@ -80,6 +80,13 @@ pub const Button = struct {
     }
 };
 
+pub fn nextTarget(current: f32, counts: i32, press: Press) f32 {
+    return switch (press) {
+        .pressed => DEFAULT_TEMP,
+        .none => adjust(current, counts),
+    };
+}
+
 test "clamp raises a temperature below the minimum to the minimum" {
     try std.testing.expectEqual(@as(f32, 20.0), clamp(3.0));
 }
@@ -193,4 +200,21 @@ test "button reports nothing while held or released" {
     try std.testing.expectEqual(Press.none, button.update(.low));
     try std.testing.expectEqual(Press.none, button.update(.high));
     try std.testing.expectEqual(Press.none, button.update(.high));
+}
+
+test "nextTarget moves the target by one step per count" {
+    try std.testing.expectEqual(@as(f32, 25.0), nextTarget(24.0, 2, .none));
+    try std.testing.expectEqual(@as(f32, 23.0), nextTarget(24.0, -2, .none));
+}
+
+test "nextTarget keeps the target when nothing happened" {
+    try std.testing.expectEqual(@as(f32, 24.0), nextTarget(24.0, 0, .none));
+}
+
+test "nextTarget resets to the default on a press" {
+    try std.testing.expectEqual(DEFAULT_TEMP, nextTarget(28.0, 0, .pressed));
+}
+
+test "nextTarget lets a press override counts from the same tick" {
+    try std.testing.expectEqual(DEFAULT_TEMP, nextTarget(28.0, 4, .pressed));
 }

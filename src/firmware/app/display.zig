@@ -34,6 +34,10 @@ pub fn poll(self: *Self) void {
     _ = display_content.tempRow(&temp_row, self.readings.current_temp);
     oled.textRow(0, &temp_row);
 
+    var target_row: [16]u8 = undefined;
+    _ = display_content.targetRow(&target_row, self.readings.target_temp);
+    oled.textRow(2, &target_row);
+
     var dist_row: [16]u8 = undefined;
     _ = display_content.distanceRow(&dist_row, self.readings.distance_cm);
     oled.textRow(4, &dist_row);

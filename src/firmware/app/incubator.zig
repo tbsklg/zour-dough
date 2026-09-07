@@ -10,6 +10,8 @@ const temp_sensor = @import("../platform/rp2040/drivers/temp_sensor.zig");
 const ultrasonic = @import("../platform/rp2040/drivers/ultrasonic.zig");
 const power_switch = @import("../platform/rp2040/drivers/power_switch.zig");
 const PowerSwitch = @import("../domain/power_switch_control.zig").PowerSwitch;
+const rotary = @import("../platform/rp2040/drivers/rotary.zig");
+const rotary_control = @import("../domain/rotary_control.zig");
 const Readings = @import("./readings.zig").Readings;
 
 const Self = @This();
@@ -18,6 +20,7 @@ ticker: Ticker,
 readings: *Readings,
 heater_state: heater_control.HeaterState = .power_off,
 power_switch_state: PowerSwitch = .{},
+rotary_state: rotary_control.Rotary = .{ .last_clk = .high, .last_sw = .high },
 
 pub fn init(pins: board.Pins, tick_interval_us: u64, readings: *Readings) !Self {
     try temp_sensor.init(pins.temp);
@@ -29,6 +32,7 @@ pub fn init(pins: board.Pins, tick_interval_us: u64, readings: *Readings) !Self 
 
     heater.init(pins.heater);
     power_switch.init(pins.power_switch);
+    rotary.init(pins.rotary_sw, pins.rotary_clk, pins.rotary_dt);
 
     const self = Self{ .ticker = .{ .interval_us = tick_interval_us }, .readings = readings };
     heater.set(self.heater_state) catch |err| {
@@ -40,11 +44,23 @@ pub fn init(pins: board.Pins, tick_interval_us: u64, readings: *Readings) !Self 
 
 pub fn poll(self: *Self) void {
     power_switch.read(&self.power_switch_state);
+    self.pollRotary();
 
     const now = time.get_time_since_boot().to_us();
     if (!self.ticker.ready(now)) return;
 
     self.runCycle(now);
+}
+
+fn pollRotary(self: *Self) void {
+    const delta = self.rotary_state.update(rotary.readClk(), rotary.readDt());
+    if (delta != 0) {
+        self.readings.recordTarget(rotary_control.clamp(self.readings.target_temp + delta));
+    }
+
+    if (self.rotary_state.updateButton(rotary.readSw())) {
+        self.readings.recordTarget(22.0);
+    }
 }
 
 fn runCycle(self: *Self, now_us: u64) void {
@@ -82,7 +98,7 @@ fn runCycle(self: *Self, now_us: u64) void {
 }
 
 fn decideHeaterState(self: *Self, temp: f32, now_us: u64) void {
-    self.heater_state = heater_control.decide(temp, self.power_switch_state.state, self.heater_state, now_us);
+    self.heater_state = heater_control.decide(temp, self.readings.target_temp, self.power_switch_state.state, self.heater_state, now_us);
 }
 
 test "incubator turns off the heater command after the power switch is switched off" {
@@ -93,13 +109,13 @@ test "incubator turns off the heater command after the power switch is switched 
     };
     incubator.power_switch_state.switchOn();
 
-    incubator.decideHeaterState(heater_control.TEMP_THRESHOLD_MIN - 1, 100);
+    incubator.decideHeaterState(readings.target_temp - 1, 100);
     try @import("std").testing.expectEqual(
         heater_control.HeaterState{ .heating = .{ .since_us = 100 } },
         incubator.heater_state,
     );
 
     incubator.power_switch_state.switchOff();
-    incubator.decideHeaterState(heater_control.TEMP_THRESHOLD_MIN - 1, 200);
+    incubator.decideHeaterState(readings.target_temp - 1, 200);
     try @import("std").testing.expectEqual(heater_control.HeaterState.power_off, incubator.heater_state);
 }

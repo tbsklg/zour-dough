@@ -5,6 +5,7 @@ pub const Readings = struct {
 
     distance_cm: ?f32 = null,
     heat: Heat = .idle,
+    target_temp: f32 = 22.0,
 
     pub fn recordTemp(self: *Readings, temp: f32) void {
         self.current_temp = temp;
@@ -20,6 +21,10 @@ pub const Readings = struct {
 
     pub fn recordHeat(self: *Readings, heat: Heat) void {
         self.heat = heat;
+    }
+
+    pub fn recordTarget(self: *Readings, temp: f32) void {
+        self.target_temp = temp;
     }
 };
 
@@ -44,6 +49,12 @@ test "recordDistance stores the distance" {
     var readings: Readings = .{};
     readings.recordDistance(12.4);
     try std.testing.expectEqual(@as(?f32, 12.4), readings.distance_cm);
+}
+
+test "recordTarget stores the target temperature" {
+    var readings: Readings = .{};
+    readings.recordTarget(24.0);
+    try std.testing.expectEqual(@as(f32, 24.0), readings.target_temp);
 }
 
 test "recordTemp stores the temperature" {

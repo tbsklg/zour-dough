@@ -10,6 +10,9 @@ pub const pin_config = rp2xxx.pins.GlobalConfiguration{
     // Baker's physical on/off toggle switch. Wired to ground, so pull-up
     // reads .low on the pin when the switch is on.
     .GPIO18 = .{ .name = "power_switch", .direction = .in, .pull = .up },
+    .GPIO13 = .{ .name = "rotary_sw", .direction = .in, .pull = .up },
+    .GPIO14 = .{ .name = "rotary_clk", .direction = .in, .pull = .up },
+    .GPIO15 = .{ .name = "rotary_dt", .direction = .in, .pull = .up },
 };
 
 pub const Pins = @TypeOf(pin_config.apply());

@@ -45,3 +45,12 @@ test "distanceRow renders --- after a timeout" {
     var buf: [16]u8 = undefined;
     try std.testing.expectEqualStrings("DIST      ---   ", distanceRow(&buf, null));
 }
+
+pub fn targetRow(buf: *[16]u8, target: f32) []const u8 {
+    return std.fmt.bufPrint(buf, "{s:<4}{d:>10.1} C", .{ "SET", target }) catch unreachable;
+}
+
+test "targetRow renders the target temperature" {
+    var buf: [16]u8 = undefined;
+    try std.testing.expectEqualStrings("SET       22.0 C", targetRow(&buf, 22.0));
+}

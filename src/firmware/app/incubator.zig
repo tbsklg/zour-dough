@@ -114,7 +114,7 @@ fn senseTemp(self: *Self, now_us: u64) void {
 }
 
 fn senseDistance(self: *Self, now_us: u64) void {
-    if (!self.distance_ticker.ready(now_us)) return;
+    if (self.distance_ticker.poll(now_us) == .waiting) return;
 
     const distance_cm = ultrasonic.measure(usb_cdc.poll) catch |err| {
         usb_cdc.write("ultrasonic read failed: {s}\r\n", .{@errorName(err)});
@@ -154,7 +154,7 @@ fn actuateHeater(self: *Self) void {
 fn actuateLed(self: *Self, now_us: u64) void {
     const desired: Blink.LedState = if (self.heater_state == .heating)
         .on
-    else if (self.heartbeat_ticker.ready(now_us))
+    else if (self.heartbeat_ticker.poll(now_us) == .fired)
         self.led_state.toggled()
     else
         self.led_state;
@@ -166,7 +166,7 @@ fn actuateLed(self: *Self, now_us: u64) void {
 }
 
 fn report(self: *Self, snapshot: Snapshot, now_us: u64) void {
-    if (!self.telemetry_ticker.ready(now_us)) return;
+    if (self.telemetry_ticker.poll(now_us) == .waiting) return;
 
     usb_cdc.write("temp: {?} dist: {?} target: {} power: {s} heater: {s}\r\n", .{
         snapshot.temp,

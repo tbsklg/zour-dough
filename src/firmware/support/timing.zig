@@ -4,16 +4,18 @@ const std = @import("std");
 // last fire. Pure logic, no hardware/time dependency — the caller supplies
 // "now" (e.g. from time.get_time_since_boot().to_us()) and drives its own
 // polling loop.
+pub const Tick = enum { waiting, fired };
+
 pub const Ticker = struct {
     interval_us: u64,
     last_fired_us: ?u64 = null,
 
-    pub fn ready(self: *Ticker, now_us: u64) bool {
+    pub fn poll(self: *Ticker, now_us: u64) Tick {
         if (self.last_fired_us) |last| {
-            if (now_us - last < self.interval_us) return false;
+            if (now_us - last < self.interval_us) return .waiting;
         }
         self.last_fired_us = now_us;
-        return true;
+        return .fired;
     }
 };
 
@@ -41,13 +43,13 @@ pub const Sampler = struct {
     }
 };
 
-test "ready fires once the interval has elapsed and not before" {
+test "poll fires once the interval has elapsed and not before" {
     var ticker = Ticker{ .interval_us = 100 };
-    try std.testing.expectEqual(true, ticker.ready(0));
-    try std.testing.expectEqual(false, ticker.ready(99));
-    try std.testing.expectEqual(true, ticker.ready(100));
-    try std.testing.expectEqual(false, ticker.ready(199));
-    try std.testing.expectEqual(true, ticker.ready(200));
+    try std.testing.expectEqual(Tick.fired, ticker.poll(0));
+    try std.testing.expectEqual(Tick.waiting, ticker.poll(99));
+    try std.testing.expectEqual(Tick.fired, ticker.poll(100));
+    try std.testing.expectEqual(Tick.waiting, ticker.poll(199));
+    try std.testing.expectEqual(Tick.fired, ticker.poll(200));
 }
 
 const BOOT_US: u64 = 1_200_000;

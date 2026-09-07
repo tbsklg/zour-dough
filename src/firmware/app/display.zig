@@ -30,7 +30,7 @@ pub fn init(pins: board.Pins, readings: *const Readings) !Self {
 
 pub fn poll(self: *Self) void {
     const now = time.get_time_since_boot().to_us();
-    if (!self.ticker.ready(now)) return;
+    if (self.ticker.poll(now) == .waiting) return;
 
     var temp_row: [16]u8 = undefined;
     _ = display_content.tempRow(&temp_row, self.readings.freshTemp(now));

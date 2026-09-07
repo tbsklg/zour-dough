@@ -1,6 +1,8 @@
 const rp2xxx = @import("microzig").hal;
 
 pub const pin_config = rp2xxx.pins.GlobalConfiguration{
+    .GPIO0 = .{ .name = "oled_sda", .direction = .in, .pull = .up },
+    .GPIO1 = .{ .name = "oled_scl", .direction = .in, .pull = .up },
     .GPIO22 = .{ .name = "temp", .direction = .in, .pull = .up },
     .GPIO21 = .{ .name = "heater", .direction = .out, .pull = .down },
     .GPIO20 = .{ .name = "ultra_sound_trigger", .direction = .out, .pull = .down },

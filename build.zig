@@ -9,11 +9,16 @@ pub fn build(b: *std.Build) void {
     const mz_dep = b.dependency("microzig", .{});
     const mb = MicroBuild.init(b, mz_dep) orelse return;
 
+    const font8x8_dep = b.dependency("font8x8", .{});
+
     const firmware = mb.add_firmware(.{
         .name = "zourdough",
         .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
         .optimize = .ReleaseSmall,
         .root_source_file = b.path("src/firmware/main.zig"),
+        .imports = &.{
+            .{ .name = "font8x8", .module = font8x8_dep.module("font8x8") },
+        },
     });
 
     const target = b.standardTargetOptions(.{});
@@ -50,7 +55,6 @@ pub fn build(b: *std.Build) void {
     const test_files = [_][]const u8{
         "src/firmware/domain/power_switch_control.zig",
         "src/firmware/domain/heater_control.zig",
-        "src/firmware/domain/text_layout.zig",
         "src/firmware/main.zig",
     };
 

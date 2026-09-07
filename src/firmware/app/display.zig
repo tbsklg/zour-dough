@@ -5,7 +5,7 @@ const oled = @import("../platform/rp2040/drivers/oled.zig");
 const display_content = @import("../domain/display_content.zig");
 const usb_cdc = @import("../platform/rp2040/transport/usb_cdc.zig");
 const Ticker = @import("../support/timing.zig").Ticker;
-const Readings = @import("./readings.zig").Readings;
+const Readings = @import("../domain/readings.zig").Readings;
 
 const Self = @This();
 

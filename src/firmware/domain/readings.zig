@@ -1,5 +1,5 @@
 const std = @import("std");
-const rotary_control = @import("../domain/rotary_control.zig");
+const rotary_control = @import("./rotary_control.zig");
 
 pub const MAX_TEMP_AGE_US: u64 = 3_000_000;
 

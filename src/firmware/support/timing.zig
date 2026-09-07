@@ -6,10 +6,12 @@ const std = @import("std");
 // polling loop.
 pub const Ticker = struct {
     interval_us: u64,
-    last_fired_us: u64 = 0,
+    last_fired_us: ?u64 = null,
 
     pub fn ready(self: *Ticker, now_us: u64) bool {
-        if (now_us - self.last_fired_us < self.interval_us) return false;
+        if (self.last_fired_us) |last| {
+            if (now_us - last < self.interval_us) return false;
+        }
         self.last_fired_us = now_us;
         return true;
     }

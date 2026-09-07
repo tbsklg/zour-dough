@@ -3,7 +3,7 @@ const status_led = @import("./platform/rp2040/drivers/status_led.zig");
 const board = @import("./platform/rp2040/board/pico_wh.zig");
 const Incubator = @import("./app/incubator.zig");
 const Display = @import("./app/display.zig");
-const Readings = @import("./app/readings.zig").Readings;
+const Readings = @import("./domain/readings.zig").Readings;
 
 const HEARTBEAT_INTERVAL_US: u64 = 500_000;
 

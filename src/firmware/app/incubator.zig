@@ -15,8 +15,8 @@ const PowerSwitch = @import("../domain/power_switch_control.zig").PowerSwitch;
 const rotary = @import("../platform/rp2040/drivers/rotary.zig");
 const rotary_control = @import("../domain/rotary_control.zig");
 const Blink = @import("../domain/blink.zig");
-const Readings = @import("./readings.zig").Readings;
-const MAX_TEMP_AGE_US = @import("./readings.zig").MAX_TEMP_AGE_US;
+const Readings = @import("../domain/readings.zig").Readings;
+const MAX_TEMP_AGE_US = @import("../domain/readings.zig").MAX_TEMP_AGE_US;
 
 const Self = @This();
 

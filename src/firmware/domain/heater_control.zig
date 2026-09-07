@@ -15,18 +15,22 @@ pub const HYSTERESIS: f32 = 0.2;
 
 /// Pure bang-bang decision: given the current temperature, the target
 /// temperature, the Baker's power switch state, and the heater's current
-/// state, decide its next state. `now_us` only timestamps new heating stints;
-/// hardware-free so it can be tested without a GPIO or a board.
-pub fn decide(temp: f32, target: f32, power_state: PowerState, current: HeaterState, now_us: u64) HeaterState {
+/// state, decide its next state. `temp` is null before the first successful
+/// read. `now_us` only timestamps new heating stints; hardware-free so it can
+/// be tested without a GPIO or a board.
+pub fn decide(temp: ?f32, target: f32, power_state: PowerState, current: HeaterState, now_us: u64) HeaterState {
     return switch (power_state) {
         .off => .power_off,
         .on => {
-            if (temp <= target - HYSTERESIS) return switch (current) {
+            // No reading yet: never heat blind.
+            const t = temp orelse return .idle;
+
+            if (t <= target - HYSTERESIS) return switch (current) {
                 // Already heating: keep the original start of this stint.
                 .heating => current,
                 else => .{ .heating = .{ .since_us = now_us } },
             };
-            if (temp >= target + HYSTERESIS) return .idle;
+            if (t >= target + HYSTERESIS) return .idle;
             return switch (current) {
                 // Power is back on but nothing demands heat yet.
                 .power_off => .idle,
@@ -70,6 +74,13 @@ test "decide treats a held power_off as idle once power is back on" {
 test "decide keeps the original stint start when temp stays below the band" {
     const heating = HeaterState{ .heating = .{ .since_us = 50 } };
     try std.testing.expectEqual(heating, decide(HEAT_BELOW - 1, TARGET, .on, heating, 100));
+}
+
+test "decide never heats without a temperature reading" {
+    try std.testing.expectEqual(HeaterState.idle, decide(null, TARGET, .on, .idle, 100));
+
+    const heating = HeaterState{ .heating = .{ .since_us = 50 } };
+    try std.testing.expectEqual(HeaterState.idle, decide(null, TARGET, .on, heating, 100));
 }
 
 test "decide forces heater off when the power switch is off regardless of temp" {

@@ -14,15 +14,6 @@ pub fn set(state: Blink.LedState) void {
     cyw43.gpio.put(.led, state == .on);
 }
 
-var heartbeat_state: Blink.LedState = .off;
-
-// Flips the heartbeat LED. Caller decides *when* (loop cadence lives with
-// the caller); this just owns the on/off state itself.
-pub fn toggle() void {
-    heartbeat_state = heartbeat_state.toggled();
-    set(heartbeat_state);
-}
-
 // Visual "flash succeeded" confirmation: blink fast a few times before the
 // main loop's heartbeat takes over. Blocking sleep_ms is fine here since
 // it's meant to run before usb_cdc.init(), so there's no USB poll to starve.

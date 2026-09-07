@@ -46,6 +46,20 @@ test "distanceRow renders --- after a timeout" {
     try std.testing.expectEqualStrings("DIST      ---   ", distanceRow(&buf, null));
 }
 
+pub fn statusRow(buf: *[16]u8, heating: bool) []const u8 {
+    return std.fmt.bufPrint(buf, "{s:^16}", .{if (heating) "HEATING" else "READY"}) catch unreachable;
+}
+
+test "statusRow centers HEATING while heating" {
+    var buf: [16]u8 = undefined;
+    try std.testing.expectEqualStrings("    HEATING     ", statusRow(&buf, true));
+}
+
+test "statusRow centers READY while idle" {
+    var buf: [16]u8 = undefined;
+    try std.testing.expectEqualStrings("     READY      ", statusRow(&buf, false));
+}
+
 pub fn targetRow(buf: *[16]u8, target: f32) []const u8 {
     return std.fmt.bufPrint(buf, "{s:<4}{d:>10.1} C", .{ "SET", target }) catch unreachable;
 }

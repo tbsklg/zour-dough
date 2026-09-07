@@ -5,9 +5,7 @@ const Incubator = @import("./app/incubator.zig");
 const Display = @import("./app/display.zig");
 const Readings = @import("./app/readings.zig").Readings;
 
-// Interval for the fermenter's periodic work (LED heartbeat, temp/heater
-// check, ultrasound read). fast: 100ms, slow: 500_000
-const MAIN_LOOP_INTERVAL_US: u64 = 800_000;
+const HEARTBEAT_INTERVAL_US: u64 = 500_000;
 
 pub fn main() !void {
     const pins = board.apply();
@@ -15,7 +13,7 @@ pub fn main() !void {
     try init_peripherals();
 
     var readings: Readings = .{};
-    var incubator = try Incubator.init(pins, MAIN_LOOP_INTERVAL_US, &readings);
+    var incubator = try Incubator.init(pins, HEARTBEAT_INTERVAL_US, &readings);
     var display = try Display.init(pins, &readings);
 
     while (true) {

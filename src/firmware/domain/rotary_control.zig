@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const MIN_TEMP: f32 = 20.0;
 pub const MAX_TEMP: f32 = 30.0;
+pub const DEFAULT_TEMP: f32 = 22.0;
 
 pub const STEP: f32 = 0.5;
 

@@ -4,12 +4,14 @@ const board = @import("../platform/rp2040/board/pico_wh.zig");
 const oled = @import("../platform/rp2040/drivers/oled.zig");
 const display_content = @import("../domain/display_content.zig");
 const usb_cdc = @import("../platform/rp2040/transport/usb_cdc.zig");
-const Ticker = @import("../support/ticker.zig").Ticker;
+const Ticker = @import("../support/timing.zig").Ticker;
 const Readings = @import("./readings.zig").Readings;
 
 const Self = @This();
 
 const REFRESH_INTERVAL_US: u64 = 500_000;
+const SEPARATOR_Y: u6 = 47;
+const STATUS_PAGE: u3 = 6;
 
 readings: *const Readings,
 ticker: Ticker,
@@ -31,7 +33,7 @@ pub fn poll(self: *Self) void {
     if (!self.ticker.ready(now)) return;
 
     var temp_row: [16]u8 = undefined;
-    _ = display_content.tempRow(&temp_row, self.readings.current_temp);
+    _ = display_content.tempRow(&temp_row, self.readings.freshTemp(now));
     oled.textRow(0, &temp_row);
 
     var target_row: [16]u8 = undefined;
@@ -41,6 +43,15 @@ pub fn poll(self: *Self) void {
     var dist_row: [16]u8 = undefined;
     _ = display_content.distanceRow(&dist_row, self.readings.distance_cm);
     oled.textRow(4, &dist_row);
+
+    const heating = self.readings.heat == .heating;
+
+    var status_row: [16]u8 = undefined;
+    _ = display_content.statusRow(&status_row, heating);
+    oled.textRow(STATUS_PAGE, &status_row);
+    if (heating) oled.invertRow(STATUS_PAGE);
+
+    oled.hline(SEPARATOR_Y);
 
     oled.flush() catch |err| {
         usb_cdc.write("display flush failed: {s}\r\n", .{@errorName(err)});

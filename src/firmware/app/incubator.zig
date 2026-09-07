@@ -41,7 +41,6 @@ pub fn init(pins: board.Pins, heartbeat_interval_us: u64, readings: *Readings) !
     };
 
     ultrasonic.init(pins.ultra_sound_trigger, pins.ultra_sound_echo);
-
     heater.init(pins.heater);
     power_switch.init(pins.power_switch);
     rotary.init(pins.rotary_sw, pins.rotary_clk, pins.rotary_dt);

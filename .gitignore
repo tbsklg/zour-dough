@@ -8,6 +8,7 @@ build-*/
 doc/reference/
 doc/development/
 doc/zigtober/
+zig-pkg/
 
 # Zig object/header outputs (if you emit them into repo build dirs)
 *.o

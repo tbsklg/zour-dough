@@ -3,6 +3,7 @@
 zig-cache/
 zig-out/
 .zig-out/
+zig-pkg/
 build/
 build-*/
 doc/reference/

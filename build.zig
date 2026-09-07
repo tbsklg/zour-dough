@@ -55,6 +55,8 @@ pub fn build(b: *std.Build) void {
     const test_files = [_][]const u8{
         "src/firmware/domain/power_switch_control.zig",
         "src/firmware/domain/heater_control.zig",
+        "src/firmware/domain/display_content.zig",
+        "src/firmware/app/readings.zig",
         "src/firmware/main.zig",
     };
 

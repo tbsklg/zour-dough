@@ -6,8 +6,14 @@ const font8x8 = @import("font8x8");
 
 const I2C_ADDR: u7 = 0x3C;
 
+const Display = ssd1306.SSD1306_Generic(.{
+    .mode = .i2c,
+    .Datagram_Device = rp2xxx.drivers.I2C_Datagram_Device,
+    .Digital_IO = @TypeOf(null),
+});
+
 var fb: ssd1306.Framebuffer = undefined;
-var display: ssd1306.SSD1306_I2C = undefined;
+var display: Display = undefined;
 
 pub fn init(sda_pin: anytype, scl_pin: anytype) !void {
     inline for (.{ scl_pin, sda_pin }) |pin| {

@@ -69,12 +69,14 @@ pub const Quadrature = struct {
     }
 };
 
+pub const Press = enum { none, pressed };
+
 pub const Button = struct {
     last: Level = .high,
 
-    pub fn update(self: *Button, sw: Level) bool {
+    pub fn update(self: *Button, sw: Level) Press {
         defer self.last = sw;
-        return self.last == .high and sw == .low;
+        return if (self.last == .high and sw == .low) .pressed else .none;
     }
 };
 
@@ -182,13 +184,13 @@ test "update tracks a direction reversal without emitting a stale count" {
 
 test "button reports a press on a falling edge" {
     var button = Button{};
-    try std.testing.expectEqual(true, button.update(.low));
+    try std.testing.expectEqual(Press.pressed, button.update(.low));
 }
 
 test "button reports nothing while held or released" {
     var button = Button{};
-    try std.testing.expectEqual(true, button.update(.low));
-    try std.testing.expectEqual(false, button.update(.low));
-    try std.testing.expectEqual(false, button.update(.high));
-    try std.testing.expectEqual(false, button.update(.high));
+    try std.testing.expectEqual(Press.pressed, button.update(.low));
+    try std.testing.expectEqual(Press.none, button.update(.low));
+    try std.testing.expectEqual(Press.none, button.update(.high));
+    try std.testing.expectEqual(Press.none, button.update(.high));
 }

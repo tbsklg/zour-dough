@@ -5,6 +5,7 @@ const board = @import("../platform/rp2040/board/pico.zig");
 const status_led = @import("../platform/rp2040/drivers/status_led.zig");
 const timing = @import("../support/timing.zig");
 const Ticker = timing.Ticker;
+const Tick = timing.Tick;
 const heater = @import("../platform/rp2040/drivers/heater.zig");
 const heater_control = @import("../domain/heater_control.zig");
 const temp_sensor = @import("../platform/rp2040/drivers/temp_sensor.zig");
@@ -29,6 +30,11 @@ pub const Snapshot = struct {
     distance: ?f32,
     target: f32,
     power: PowerState,
+};
+
+const Ticks = struct {
+    heartbeat: Tick,
+    telemetry: Tick,
 };
 
 readings: *Readings,
@@ -62,10 +68,14 @@ pub fn init(pins: board.Pins, readings: *Readings) !Self {
 
 pub fn poll(self: *Self) void {
     const now = time.get_time_since_boot().to_us();
+    const ticks = Ticks{
+        .heartbeat = self.heartbeat_ticker.poll(now),
+        .telemetry = self.telemetry_ticker.poll(now),
+    };
 
     const snapshot = self.sense(now);
     self.control(snapshot, now);
-    self.actuate(snapshot, now);
+    self.actuate(snapshot, ticks);
 }
 
 fn sense(self: *Self, now_us: u64) Snapshot {
@@ -92,7 +102,7 @@ fn senseRotary(self: *Self) void {
         self.readings.recordTarget(rotary_control.adjust(self.readings.target_temp, counts));
     }
 
-    if (self.button_state.update(rotary.readSw())) {
+    if (self.button_state.update(rotary.readSw()) == .pressed) {
         self.readings.recordTarget(rotary_control.DEFAULT_TEMP);
     }
 }
@@ -134,10 +144,10 @@ fn control(self: *Self, snapshot: Snapshot, now_us: u64) void {
     );
 }
 
-fn actuate(self: *Self, snapshot: Snapshot, now_us: u64) void {
+fn actuate(self: *Self, snapshot: Snapshot, ticks: Ticks) void {
     self.actuateHeater();
-    self.actuateLed(now_us);
-    self.report(snapshot, now_us);
+    self.actuateLed(ticks.heartbeat);
+    self.report(snapshot, ticks.telemetry);
 }
 
 fn actuateHeater(self: *Self) void {
@@ -151,13 +161,10 @@ fn actuateHeater(self: *Self) void {
     };
 }
 
-fn actuateLed(self: *Self, now_us: u64) void {
-    const desired: Blink.LedState = if (self.heater_state == .heating)
-        .on
-    else if (self.heartbeat_ticker.poll(now_us) == .fired)
-        self.led_state.toggled()
-    else
-        self.led_state;
+fn actuateLed(self: *Self, heartbeat: Tick) void {
+    const mode: Blink.Mode = if (self.heater_state == .heating) .solid else .heartbeat;
+    const beat: Blink.Beat = if (heartbeat == .fired) .toggle else .hold;
+    const desired = Blink.desired(self.led_state, mode, beat);
 
     if (desired == self.led_state) return;
 
@@ -165,8 +172,8 @@ fn actuateLed(self: *Self, now_us: u64) void {
     status_led.set(desired);
 }
 
-fn report(self: *Self, snapshot: Snapshot, now_us: u64) void {
-    if (self.telemetry_ticker.poll(now_us) == .waiting) return;
+fn report(self: *Self, snapshot: Snapshot, telemetry: Tick) void {
+    if (telemetry == .waiting) return;
 
     usb_cdc.write("temp: {?} dist: {?} target: {} power: {s} heater: {s}\r\n", .{
         snapshot.temp,

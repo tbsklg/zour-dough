@@ -59,6 +59,7 @@ pub fn build(b: *std.Build) void {
         "src/firmware/domain/rotary_control.zig",
         "src/firmware/support/timing.zig",
         "src/firmware/domain/readings.zig",
+        "src/firmware/domain/blink.zig",
         "src/firmware/main.zig",
     };
 

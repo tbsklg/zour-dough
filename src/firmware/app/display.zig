@@ -11,7 +11,7 @@ const Self = @This();
 
 const REFRESH_INTERVAL_US: u64 = 500_000;
 const SEPARATOR_Y: u6 = 47;
-const STATUS_PAGE: u3 = 6;
+const STATUS_PAGE: u3 = 7;
 
 readings: *const Readings,
 ticker: Ticker,

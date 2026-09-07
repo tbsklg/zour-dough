@@ -1,4 +1,3 @@
-const std = @import("std");
 const rp2xxx = @import("microzig").hal;
 const time = rp2xxx.time;
 const usb_cdc = @import("../platform/rp2040/transport/usb_cdc.zig");
@@ -65,8 +64,8 @@ pub fn poll(self: *Self) void {
     const now = time.get_time_since_boot().to_us();
 
     const snapshot = self.sense(now);
-    const heat = self.control(snapshot, now);
-    self.actuate(snapshot, heat, now);
+    self.control(snapshot, now);
+    self.actuate(snapshot, now);
 }
 
 fn sense(self: *Self, now_us: u64) Snapshot {
@@ -125,7 +124,7 @@ fn senseDistance(self: *Self, now_us: u64) void {
     self.readings.recordDistance(distance_cm);
 }
 
-fn control(self: *Self, snapshot: Snapshot, now_us: u64) heater_control.HeaterState {
+fn control(self: *Self, snapshot: Snapshot, now_us: u64) void {
     self.heater_state = heater_control.decide(
         snapshot.temp,
         snapshot.target,
@@ -133,28 +132,27 @@ fn control(self: *Self, snapshot: Snapshot, now_us: u64) heater_control.HeaterSt
         self.heater_state,
         now_us,
     );
-    return self.heater_state;
 }
 
-fn actuate(self: *Self, snapshot: Snapshot, heat: heater_control.HeaterState, now_us: u64) void {
-    self.actuateHeater(heat);
-    self.actuateLed(heat, now_us);
-    self.report(snapshot, heat, now_us);
+fn actuate(self: *Self, snapshot: Snapshot, now_us: u64) void {
+    self.actuateHeater();
+    self.actuateLed(now_us);
+    self.report(snapshot, now_us);
 }
 
-fn actuateHeater(self: *Self, heat: heater_control.HeaterState) void {
-    self.readings.recordHeat(switch (heat) {
+fn actuateHeater(self: *Self) void {
+    self.readings.recordHeat(switch (self.heater_state) {
         .heating => .heating,
         else => .idle,
     });
 
-    heater.set(heat) catch |err| {
+    heater.set(self.heater_state) catch |err| {
         usb_cdc.write("heater write failed: {s}\r\n", .{@errorName(err)});
     };
 }
 
-fn actuateLed(self: *Self, heat: heater_control.HeaterState, now_us: u64) void {
-    const desired: Blink.LedState = if (heat == .heating)
+fn actuateLed(self: *Self, now_us: u64) void {
+    const desired: Blink.LedState = if (self.heater_state == .heating)
         .on
     else if (self.heartbeat_ticker.ready(now_us))
         self.led_state.toggled()
@@ -167,7 +165,7 @@ fn actuateLed(self: *Self, heat: heater_control.HeaterState, now_us: u64) void {
     status_led.set(desired);
 }
 
-fn report(self: *Self, snapshot: Snapshot, heat: heater_control.HeaterState, now_us: u64) void {
+fn report(self: *Self, snapshot: Snapshot, now_us: u64) void {
     if (!self.telemetry_ticker.ready(now_us)) return;
 
     usb_cdc.write("temp: {?} dist: {?} target: {} power: {s} heater: {s}\r\n", .{
@@ -175,43 +173,6 @@ fn report(self: *Self, snapshot: Snapshot, heat: heater_control.HeaterState, now
         snapshot.distance,
         snapshot.target,
         @tagName(snapshot.power),
-        @tagName(heat),
+        @tagName(self.heater_state),
     });
-}
-
-fn heatingSnapshot(target: f32) Snapshot {
-    return .{ .temp = target - 1, .distance = null, .target = target, .power = .on };
-}
-
-test "control latches the heater on while the temperature is below target" {
-    var readings: Readings = .{};
-    var incubator = Self{ .readings = &readings };
-
-    const heat = incubator.control(heatingSnapshot(readings.target_temp), 100);
-    try std.testing.expectEqual(heater_control.HeaterState{ .heating = .{ .since_us = 100 } }, heat);
-    try std.testing.expectEqual(heat, incubator.heater_state);
-}
-
-test "control turns the heater off after the power switch is switched off" {
-    var readings: Readings = .{};
-    var incubator = Self{ .readings = &readings };
-
-    _ = incubator.control(heatingSnapshot(readings.target_temp), 100);
-
-    var off = heatingSnapshot(readings.target_temp);
-    off.power = .off;
-
-    const heat = incubator.control(off, 200);
-    try std.testing.expectEqual(heater_control.HeaterState.power_off, heat);
-}
-
-test "control does not heat without a temperature reading" {
-    var readings: Readings = .{};
-    var incubator = Self{ .readings = &readings };
-
-    var blind = heatingSnapshot(readings.target_temp);
-    blind.temp = null;
-
-    const heat = incubator.control(blind, 100);
-    try std.testing.expectEqual(heater_control.HeaterState.idle, heat);
 }

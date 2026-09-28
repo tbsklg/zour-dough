@@ -31,7 +31,7 @@ pub fn main() !void {
         &readings,
     );
 
-    try print_home(&screen);
+    try display_start_screen(&screen);
     time.sleep_ms(2000);
 
     while (true) {
@@ -47,7 +47,7 @@ pub fn init_peripherals(pins: board.Pins) void {
     usb_cdc.init();
 }
 
-fn print_home(screen: *Screen) !void {
+fn display_start_screen(screen: *Screen) !void {
     screen.draw_bitmap(
         0,
         0,

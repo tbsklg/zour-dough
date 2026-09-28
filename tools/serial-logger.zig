@@ -10,6 +10,8 @@
 //     never assert DCD, so the call hangs forever without this flag.
 //   - waitForSerial() uses posix.access() (not open()) to check existence,
 //     since access() never blocks regardless of DCD state.
+//   - O_NONBLOCK must then be cleared with fcntl() once the port is open,
+//     otherwise read() returns EAGAIN immediately and VMIN/VTIME are ignored.
 //   - VMIN=0 + VTIME=1 in termios makes reads return after 0.1s if no data
 //     arrives, allowing the main loop to also poll for UF2 changes.
 
@@ -43,6 +45,12 @@ fn openSerial() !std.posix.fd_t {
     tty.ispeed = @enumFromInt(115200);
     tty.ospeed = @enumFromInt(115200);
     try std.posix.tcsetattr(fd, .NOW, tty);
+
+    // Clear O_NONBLOCK now that the port is open: it was only needed to get past
+    // the DCD wait in open(). Leaving it set makes read() return EAGAIN
+    // immediately, which defeats VMIN/VTIME and turns the main loop into a
+    // 100%-CPU spin.
+    _ = try std.posix.fcntl(fd, std.posix.F.SETFL, 0);
 
     return fd;
 }

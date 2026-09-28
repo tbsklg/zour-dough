@@ -1,6 +1,9 @@
 const std = @import("std");
 const microzig = @import("microzig");
 
+pub const HEIGHT = 64;
+pub const WIDTH = 128;
+
 const rp2xxx = microzig.hal;
 const ssd1306 = microzig.drivers.display.ssd1306;
 

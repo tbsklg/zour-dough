@@ -3,7 +3,9 @@ const font8x8 = @import("font8x8");
 const rp2xxx = @import("microzig").hal;
 const time = rp2xxx.time;
 
-const Oled = @import("../../platform/rp2040/drivers/oled.zig").Oled;
+const oled_mod = @import("../../platform/rp2040/drivers/oled.zig");
+const Oled = oled_mod.Oled;
+
 const usb_cdc = @import("../../platform/rp2040/transport/usb_cdc.zig");
 const Ticker = @import("../../support/timing.zig").Ticker;
 const Readings = @import("../readings.zig").Readings;
@@ -52,12 +54,13 @@ pub const Screen = struct {
         bm_height: usize,
         bitmap: []const u8,
     ) void {
-        const bytes_per_row = 128 >> 3;
+        const bytes_per_row = (bm_width + 7) / 8;
+
 
         for (0..bm_height) |y| {
             for (0..bm_width) |x| {
-                if (start_x + x >= bm_width) continue;
-                if (start_y + y >= bm_height) continue;
+                if (start_x + x >= oled_mod.WIDTH) continue;
+                if (start_y + y >= oled_mod.HEIGHT) continue;
 
                 const byte_index = y * bytes_per_row + (x >> 3);
                 const bit_index = x & 7;

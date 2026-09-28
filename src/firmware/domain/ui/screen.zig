@@ -5,10 +5,8 @@ const time = rp2xxx.time;
 
 const Oled = @import("../../platform/rp2040/drivers/oled.zig").Oled;
 const usb_cdc = @import("../../platform/rp2040/transport/usb_cdc.zig");
-
 const Ticker = @import("../../support/timing.zig").Ticker;
 const Readings = @import("../readings.zig").Readings;
-
 const text = @import("text.zig");
 
 const REFRESH_INTERVAL_US: u64 = 500_000;

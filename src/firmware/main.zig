@@ -26,13 +26,12 @@ pub fn main() !void {
     var readings: Readings = .{};
     var incubator = try Incubator.init(pins, &readings);
 
-    var screen = try Screen.init(
+    var screen = Screen.init(
         try oled.Oled.init(pins.oled_sda, pins.oled_scl),
         &readings,
     );
 
     try display_start_screen(&screen);
-    time.sleep_ms(2000);
 
     while (true) {
         usb_cdc.poll();

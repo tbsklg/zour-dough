@@ -18,7 +18,7 @@ pub const Screen = struct {
     readings: *const Readings,
     ticker: Ticker,
 
-    pub fn init(oled: Oled, readings: *const Readings) !Screen {
+    pub fn init(oled: Oled, readings: *const Readings) Screen {
         return .{
             .oled = oled,
             .readings = readings,
@@ -38,12 +38,6 @@ pub const Screen = struct {
 
     pub fn hline(self: *Screen, y: u6) void {
         for (0..128) |x| self.oled.set_pixel(@intCast(x), y);
-    }
-
-    pub fn write_text(self: *Screen, page: u3, row: *const [16]u8) void {
-        var gdram: [128]u8 = undefined;
-        _ = font8x8.Fonts.draw(&gdram, row);
-        @memcpy(self.oled.fb.pixel_data[@as(usize, page) * 128 ..][0..128], &gdram);
     }
 
     pub fn flush(self: *Screen) !void {

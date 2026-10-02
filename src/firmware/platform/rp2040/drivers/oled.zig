@@ -39,7 +39,7 @@ pub const Oled = struct {
             .clock_config = rp2xxx.clock_config,
         });
 
-        std.log.info("SSD1306: I2C1 configured", .{});
+        std.log.info("SSD1306: I2C0 configured", .{});
 
         const dd = rp2xxx.drivers.I2C_Datagram_Device.init(i2c, @enumFromInt(I2C_ADDR), null);
 
